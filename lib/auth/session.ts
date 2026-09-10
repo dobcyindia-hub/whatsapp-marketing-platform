@@ -20,7 +20,11 @@ export async function createSession(payload: SessionPayload) {
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // Secure requires the site to actually be served over HTTPS — NODE_ENV
+    // alone isn't a reliable proxy for that (a production deploy behind
+    // plain HTTP, e.g. no TLS yet, would silently lose the cookie). Opt in
+    // explicitly once a domain + TLS are in place.
+    secure: process.env.COOKIE_SECURE === "true",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
