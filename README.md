@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WhatsApp Marketing & Automation Platform
 
-## Getting Started
+A Zoho-style WhatsApp marketing dashboard built on the official Meta WhatsApp Cloud API (Next.js, Postgres/Drizzle, Redis/BullMQ).
 
-First, run the development server:
+## Status: Phase 1 — Foundation
+
+Done:
+- Project scaffold (Next.js App Router, TypeScript, Tailwind)
+- Postgres schema (teams, users, WABA accounts, contacts, lists, templates, campaigns, recipients, automations, message events) — `database/schema.ts`
+- Email/password auth with signed session cookies — `lib/auth/`
+- Dashboard shell with the 8 nav sections (Overview, Contacts, Templates, Campaigns, Automations, WhatsApp, Analytics, Settings) and empty states
+
+Not yet built (later phases): Meta OAuth connection flow, template sync, CSV contact import, campaign send worker (BullMQ), Meta webhook receiver, automation rule engine, analytics charts.
+
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local   # fill in DATABASE_URL at minimum
+npx drizzle-kit push         # create tables from database/schema.ts
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Requires a running Postgres instance. Redis is only needed starting Phase 5 (campaign sending).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Next.js 16 (App Router, route handlers, server components)
+- Drizzle ORM + postgres.js
+- BullMQ + ioredis (queue-based campaign sending, Phase 5+)
+- jose (JWT sessions) + bcryptjs (password hashing)
+- Tailwind CSS + lucide-react icons
 
-## Learn More
+## Project layout
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+app/(auth)/           login, signup
+app/(dashboard)/      the 8 dashboard sections, behind session auth
+app/api/auth/         signup, login, logout
+database/schema.ts     Drizzle schema (source of truth for the DB)
+database/relations.ts  Drizzle relations for db.query.*
+lib/auth/              session + password helpers
+lib/db/                Drizzle client
+components/dashboard/  sidebar, page header, empty state
+```
