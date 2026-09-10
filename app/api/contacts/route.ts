@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { contacts } from "@/database/schema";
 import { getSession } from "@/lib/auth/session";
 import { normalizePhone } from "@/lib/csv";
+import { fireContactCreatedAutomations } from "@/lib/automations/engine";
 import { and, desc, eq } from "drizzle-orm";
 
 export async function GET() {
@@ -57,6 +58,8 @@ export async function POST(request: NextRequest) {
       tags: tags ?? [],
     })
     .returning();
+
+  await fireContactCreatedAutomations(session.teamId, contact);
 
   return NextResponse.json({ contact });
 }

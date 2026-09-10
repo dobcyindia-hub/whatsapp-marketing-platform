@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { contacts } from "@/database/schema";
 import { getSession } from "@/lib/auth/session";
+import { fireOptInAutomations } from "@/lib/automations/engine";
 import { and, eq } from "drizzle-orm";
 
 const updateSchema = z.object({
@@ -28,6 +29,11 @@ export async function PATCH(
 
   const { optedOut, ...rest } = parsed.data;
 
+  const before = await db.query.contacts.findFirst({
+    where: and(eq(contacts.id, id), eq(contacts.teamId, session.teamId)),
+  });
+  if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   const [updated] = await db
     .update(contacts)
     .set({
@@ -39,7 +45,9 @@ export async function PATCH(
     .where(and(eq(contacts.id, id), eq(contacts.teamId, session.teamId)))
     .returning();
 
-  if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (before.optedOut && optedOut === false) {
+    await fireOptInAutomations(session.teamId, updated);
+  }
 
   return NextResponse.json({ contact: updated });
 }

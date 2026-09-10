@@ -2,7 +2,7 @@
 
 A Zoho-style WhatsApp marketing dashboard built on the official Meta WhatsApp Cloud API (Next.js, Postgres/Drizzle, Redis/BullMQ).
 
-## Status: Phase 6 — Webhooks
+## Status: Phase 7 — Automations
 
 Done:
 - Project scaffold, Postgres/Drizzle schema, email/password auth, dashboard shell (Phase 1)
@@ -10,9 +10,10 @@ Done:
 - Contact management — manual add, CSV import, lists, tags, opt-out (Phase 3)
 - Template sync from Meta + new-template submission with `{{n}}` variable preview (Phase 4)
 - Campaigns — pick an approved template + list, map `{{1}}`/`{{2}}`… to a contact field or fixed text, optional scheduling, and a BullMQ worker that sends through the real Graph API with rate limiting, retries/backoff, and per-recipient status tracking (Phase 5)
-- **Webhooks** — full delivery/read/failed status ingestion and inbound-reply handling from Meta, with HMAC signature verification, updating campaign recipient status, campaign rollup counts, and contact `lastInboundAt` in real time; every event is also logged to `message_events` (Phase 6)
+- Webhooks — full delivery/read/failed status ingestion and inbound-reply handling from Meta, with HMAC signature verification, updating campaign recipient status, campaign rollup counts, and contact `lastInboundAt` in real time; every event is also logged to `message_events` (Phase 6)
+- **Automations** — basic rule engine (`lib/automations/engine.ts`) firing an approved template on `contact_created` (manual add or CSV import), `keyword_reply` (inbound message contains a configured keyword, matched per WABA), or `opt_in` (a contact's opt-out is reversed); each run is logged to `automation_runs` with success/failure and Meta's actual error message; automations can be paused without deleting them (Phase 7)
 
-Not yet built (later phases): automation rule engine, analytics charts, account/team settings.
+Not yet built (later phases): analytics charts, account/team settings.
 
 ## Setup
 

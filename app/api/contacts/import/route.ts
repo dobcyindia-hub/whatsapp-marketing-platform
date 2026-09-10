@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { contacts, contactListMembers, contactLists } from "@/database/schema";
 import { getSession } from "@/lib/auth/session";
 import { parseCsv, normalizePhone } from "@/lib/csv";
+import { fireContactCreatedAutomations } from "@/lib/automations/engine";
 import { and, eq } from "drizzle-orm";
 
 const importSchema = z.object({
@@ -92,9 +93,10 @@ export async function POST(request: NextRequest) {
       const [created] = await db
         .insert(contacts)
         .values({ teamId: session.teamId, phone, name, email, tags })
-        .returning({ id: contacts.id });
+        .returning();
       importedIds.push(created.id);
       imported++;
+      await fireContactCreatedAutomations(session.teamId, created);
     }
   }
 

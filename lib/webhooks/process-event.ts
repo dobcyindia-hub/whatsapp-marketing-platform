@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { campaigns, campaignRecipients, contacts, messageEvents, wabaAccounts } from "@/database/schema";
+import { fireKeywordReplyAutomations } from "@/lib/automations/engine";
 import type { MetaWebhookPayload, MetaStatusUpdate, MetaInboundMessage } from "./types";
 
 async function findWabaAccount(phoneNumberId: string) {
@@ -84,6 +85,15 @@ async function handleInboundMessage(
   if (!contact) return;
 
   await db.update(contacts).set({ lastInboundAt: new Date() }).where(eq(contacts.id, contact.id));
+
+  if (message.text?.body) {
+    await fireKeywordReplyAutomations({
+      teamId: wabaAccount.teamId,
+      wabaAccountId: wabaAccount.id,
+      contact,
+      messageText: message.text.body,
+    });
+  }
 
   const recentRecipient = await db
     .select({ id: campaignRecipients.id, campaignId: campaignRecipients.campaignId })
