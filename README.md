@@ -2,16 +2,17 @@
 
 A Zoho-style WhatsApp marketing dashboard built on the official Meta WhatsApp Cloud API (Next.js, Postgres/Drizzle, Redis/BullMQ).
 
-## Status: Phase 5 — Campaigns
+## Status: Phase 6 — Webhooks
 
 Done:
 - Project scaffold, Postgres/Drizzle schema, email/password auth, dashboard shell (Phase 1)
 - Meta WABA connection flow — validated live against the Graph API, token encrypted at rest, webhook verify handshake (Phase 2)
 - Contact management — manual add, CSV import, lists, tags, opt-out (Phase 3)
 - Template sync from Meta + new-template submission with `{{n}}` variable preview (Phase 4)
-- **Campaigns** — pick an approved template + list, map `{{1}}`/`{{2}}`… to a contact field or fixed text, optional scheduling, and a BullMQ worker that sends through the real Graph API with rate limiting, retries/backoff, and per-recipient status tracking (Phase 5)
+- Campaigns — pick an approved template + list, map `{{1}}`/`{{2}}`… to a contact field or fixed text, optional scheduling, and a BullMQ worker that sends through the real Graph API with rate limiting, retries/backoff, and per-recipient status tracking (Phase 5)
+- **Webhooks** — full delivery/read/failed status ingestion and inbound-reply handling from Meta, with HMAC signature verification, updating campaign recipient status, campaign rollup counts, and contact `lastInboundAt` in real time; every event is also logged to `message_events` (Phase 6)
 
-Not yet built (later phases): full webhook event ingestion (delivered/read/replied status from Meta), automation rule engine, analytics charts.
+Not yet built (later phases): automation rule engine, analytics charts, account/team settings.
 
 ## Setup
 
