@@ -1,16 +1,33 @@
-import { PageHeader, EmptyState } from "@/components/dashboard/page-header";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { TemplatesManager } from "@/components/dashboard/templates-manager";
+import { getSession } from "@/lib/auth/session";
+import { db } from "@/lib/db/client";
+import { templates, wabaAccounts } from "@/database/schema";
+import { desc, eq } from "drizzle-orm";
 
-export default function TemplatesPage() {
+export default async function TemplatesPage() {
+  const session = await getSession();
+
+  const [templateRows, accountRows] = session
+    ? await Promise.all([
+        db.query.templates.findMany({
+          where: eq(templates.teamId, session.teamId),
+          orderBy: desc(templates.createdAt),
+        }),
+        db.query.wabaAccounts.findMany({
+          where: eq(wabaAccounts.teamId, session.teamId),
+          columns: { id: true, displayName: true, displayPhoneNumber: true },
+        }),
+      ])
+    : [[], []];
+
   return (
     <div>
       <PageHeader
         title="Templates"
         description="Meta-approved WhatsApp message templates."
       />
-      <EmptyState
-        title="No templates synced"
-        description="Connect a WhatsApp number, then sync your Meta-approved templates to use them in campaigns."
-      />
+      <TemplatesManager initialTemplates={templateRows} accounts={accountRows} />
     </div>
   );
 }

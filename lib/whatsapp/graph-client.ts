@@ -44,3 +44,50 @@ export async function fetchPhoneNumberInfo(
     accessToken
   );
 }
+
+export type MetaTemplateComponent = {
+  type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
+  format?: "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
+  text?: string;
+  buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+};
+
+export type MetaTemplate = {
+  id: string;
+  name: string;
+  language: string;
+  category: string;
+  status: string;
+  rejected_reason?: string;
+  components: MetaTemplateComponent[];
+};
+
+export async function fetchTemplates(wabaId: string, accessToken: string): Promise<MetaTemplate[]> {
+  const results: MetaTemplate[] = [];
+  let path: string | null =
+    `/${wabaId}/message_templates?fields=id,name,language,category,status,rejected_reason,components&limit=200`;
+
+  while (path) {
+    const page = await graphFetch(path, accessToken);
+    results.push(...(page.data ?? []));
+    const next: string | undefined = page.paging?.next;
+    path = next ? next.slice(next.indexOf(GRAPH_VERSION) + GRAPH_VERSION.length) : null;
+  }
+
+  return results;
+}
+
+export async function createTemplate(params: {
+  wabaId: string;
+  accessToken: string;
+  name: string;
+  language: string;
+  category: "MARKETING" | "UTILITY" | "AUTHENTICATION";
+  components: MetaTemplateComponent[];
+}): Promise<{ id: string; status: string; category: string }> {
+  const { wabaId, accessToken, name, language, category, components } = params;
+  return graphFetch(`/${wabaId}/message_templates`, accessToken, {
+    method: "POST",
+    body: JSON.stringify({ name, language, category, components }),
+  });
+}
