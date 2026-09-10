@@ -91,3 +91,29 @@ export async function createTemplate(params: {
     body: JSON.stringify({ name, language, category, components }),
   });
 }
+
+export async function sendTemplateMessage(params: {
+  phoneNumberId: string;
+  accessToken: string;
+  to: string;
+  templateName: string;
+  languageCode: string;
+  bodyParams?: string[];
+}): Promise<{ messages: Array<{ id: string }> }> {
+  const { phoneNumberId, accessToken, to, templateName, languageCode, bodyParams } = params;
+  return graphFetch(`/${phoneNumberId}/messages`, accessToken, {
+    method: "POST",
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "template",
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        ...(bodyParams && bodyParams.length > 0
+          ? { components: [{ type: "body", parameters: bodyParams.map((text) => ({ type: "text", text })) }] }
+          : {}),
+      },
+    }),
+  });
+}

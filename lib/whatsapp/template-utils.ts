@@ -46,3 +46,35 @@ export function renderPreview(bodyText: string, sampleValues?: Record<string, st
     return sampleValues?.[key] ?? `[Var ${n}]`;
   });
 }
+
+export type VariableMapping = Record<string, string>; // "1" -> "field:name" | "field:phone" | "field:email" | "static:<text>"
+
+export type MappableContact = {
+  name: string | null;
+  phone: string;
+  email: string | null;
+};
+
+// Resolves a campaign's variable mapping into an ordered array of body
+// params (index 0 = {{1}}, etc.) for one specific contact.
+export function resolveVariablesForContact(
+  variableCount: number,
+  mapping: VariableMapping,
+  contact: MappableContact
+): string[] {
+  const params: string[] = [];
+  for (let i = 1; i <= variableCount; i++) {
+    const raw = mapping[String(i)] ?? "";
+    if (raw.startsWith("field:")) {
+      const field = raw.slice("field:".length);
+      if (field === "name") params.push(contact.name || contact.phone);
+      else if (field === "email") params.push(contact.email || "");
+      else params.push(contact.phone);
+    } else if (raw.startsWith("static:")) {
+      params.push(raw.slice("static:".length));
+    } else {
+      params.push("");
+    }
+  }
+  return params;
+}
