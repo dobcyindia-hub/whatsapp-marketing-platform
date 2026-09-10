@@ -2,7 +2,7 @@
 
 A Zoho-style WhatsApp marketing dashboard built on the official Meta WhatsApp Cloud API (Next.js, Postgres/Drizzle, Redis/BullMQ).
 
-## Status: Phase 7 — Automations
+## Status: Phase 8 — Analytics & Settings (all 8 planned phases complete)
 
 Done:
 - Project scaffold, Postgres/Drizzle schema, email/password auth, dashboard shell (Phase 1)
@@ -11,9 +11,10 @@ Done:
 - Template sync from Meta + new-template submission with `{{n}}` variable preview (Phase 4)
 - Campaigns — pick an approved template + list, map `{{1}}`/`{{2}}`… to a contact field or fixed text, optional scheduling, and a BullMQ worker that sends through the real Graph API with rate limiting, retries/backoff, and per-recipient status tracking (Phase 5)
 - Webhooks — full delivery/read/failed status ingestion and inbound-reply handling from Meta, with HMAC signature verification, updating campaign recipient status, campaign rollup counts, and contact `lastInboundAt` in real time; every event is also logged to `message_events` (Phase 6)
-- **Automations** — basic rule engine (`lib/automations/engine.ts`) firing an approved template on `contact_created` (manual add or CSV import), `keyword_reply` (inbound message contains a configured keyword, matched per WABA), or `opt_in` (a contact's opt-out is reversed); each run is logged to `automation_runs` with success/failure and Meta's actual error message; automations can be paused without deleting them (Phase 7)
+- Automations — basic rule engine (`lib/automations/engine.ts`) firing an approved template on `contact_created` (manual add or CSV import), `keyword_reply` (inbound message contains a configured keyword, matched per WABA), or `opt_in` (a contact's opt-out is reversed); each run is logged to `automation_runs` with success/failure and Meta's actual error message; automations can be paused without deleting them (Phase 7)
+- **Analytics & Settings** — overall delivery/read/reply-rate stat tiles, a 14-day sent-volume chart, and per-template performance breakdown, all computed from the campaigns/campaign_recipients rollups; Settings gets workspace rename and password change (Phase 8)
 
-Not yet built (later phases): analytics charts, account/team settings.
+This closes out the original 8-phase build. Natural next steps beyond it: multi-user teams (invite flow, roles beyond `owner`), richer automation triggers (delays, multi-step sequences), template media headers (image/video/document), and a queue dashboard for the BullMQ worker.
 
 ## Setup
 
