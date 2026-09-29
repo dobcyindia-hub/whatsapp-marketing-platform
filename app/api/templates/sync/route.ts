@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
         footerText: parsedTemplate.footerText,
         buttons: parsedTemplate.buttons,
         variableCount: parsedTemplate.variableCount,
-        rejectionReason: mt.rejected_reason ?? null,
+        rejectionReason: mt.rejected_reason && mt.rejected_reason !== "NONE" ? mt.rejected_reason : null,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
           footerText: parsedTemplate.footerText,
           buttons: parsedTemplate.buttons,
           variableCount: parsedTemplate.variableCount,
-          rejectionReason: mt.rejected_reason ?? null,
+          rejectionReason: mt.rejected_reason && mt.rejected_reason !== "NONE" ? mt.rejected_reason : null,
           updatedAt: new Date(),
         },
       });
