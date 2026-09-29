@@ -66,23 +66,38 @@ async function handleStatusUpdate(
 
 async function handleInboundMessage(
   message: MetaInboundMessage,
-  wabaAccount: NonNullable<Awaited<ReturnType<typeof findWabaAccount>>>
+  wabaAccount: NonNullable<Awaited<ReturnType<typeof findWabaAccount>>>,
+  senderName?: string
 ) {
   const candidates = [message.from, `+${message.from}`];
-  const contact = await db.query.contacts.findFirst({
+  let contact = await db.query.contacts.findFirst({
     where: and(eq(contacts.teamId, wabaAccount.teamId), inArray(contacts.phone, candidates)),
   });
+
+  // Anyone who messages this number for the first time becomes a contact —
+  // otherwise inbound messages from new senders were silently dropped and
+  // never showed up anywhere in the dashboard.
+  if (!contact) {
+    const [created] = await db
+      .insert(contacts)
+      .values({
+        teamId: wabaAccount.teamId,
+        phone: `+${message.from}`,
+        name: senderName || null,
+        lastInboundAt: new Date(),
+      })
+      .returning();
+    contact = created;
+  }
 
   await db.insert(messageEvents).values({
     teamId: wabaAccount.teamId,
     wabaAccountId: wabaAccount.id,
-    contactId: contact?.id ?? null,
+    contactId: contact.id,
     eventType: "inbound",
     metaMessageId: message.id,
     rawPayload: message,
   });
-
-  if (!contact) return;
 
   await db.update(contacts).set({ lastInboundAt: new Date() }).where(eq(contacts.id, contact.id));
 
@@ -137,7 +152,8 @@ export async function processWebhookPayload(payload: MetaWebhookPayload) {
         await handleStatusUpdate(status, wabaAccount);
       }
       for (const message of value.messages ?? []) {
-        await handleInboundMessage(message, wabaAccount);
+        const senderName = value.contacts?.find((c) => c.wa_id === message.from)?.profile?.name;
+        await handleInboundMessage(message, wabaAccount, senderName);
       }
     }
   }

@@ -6,19 +6,53 @@ export function countVariables(text: string): number {
   return Math.max(...matches.map((m) => parseInt(m[1], 10)));
 }
 
+export type TemplateButtonInput = {
+  type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER";
+  text: string;
+  value?: string; // URL for type URL, phone number for type PHONE_NUMBER
+};
+
 export function buildTemplateComponents(params: {
+  headerType?: "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
   headerText?: string;
+  headerMediaHandle?: string;
   bodyText: string;
   footerText?: string;
+  buttons?: TemplateButtonInput[];
 }): MetaTemplateComponent[] {
   const components: MetaTemplateComponent[] = [];
-  if (params.headerText) {
+
+  if (params.headerType === "TEXT" && params.headerText) {
     components.push({ type: "HEADER", format: "TEXT", text: params.headerText });
+  } else if (
+    (params.headerType === "IMAGE" || params.headerType === "VIDEO" || params.headerType === "DOCUMENT") &&
+    params.headerMediaHandle
+  ) {
+    components.push({
+      type: "HEADER",
+      format: params.headerType,
+      example: { header_handle: [params.headerMediaHandle] },
+    });
   }
+
   components.push({ type: "BODY", text: params.bodyText });
+
   if (params.footerText) {
     components.push({ type: "FOOTER", text: params.footerText });
   }
+
+  if (params.buttons && params.buttons.length > 0) {
+    components.push({
+      type: "BUTTONS",
+      buttons: params.buttons.map((b) => ({
+        type: b.type,
+        text: b.text,
+        ...(b.type === "URL" ? { url: b.value } : {}),
+        ...(b.type === "PHONE_NUMBER" ? { phone_number: b.value } : {}),
+      })),
+    });
+  }
+
   return components;
 }
 

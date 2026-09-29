@@ -49,6 +49,7 @@ export type MetaTemplateComponent = {
   type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
   format?: "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
   text?: string;
+  example?: { header_handle?: string[] };
   buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
 };
 
@@ -90,6 +91,52 @@ export async function createTemplate(params: {
     method: "POST",
     body: JSON.stringify({ name, language, category, components }),
   });
+}
+
+// Meta's resumable upload API: start a session against the app, then upload
+// the bytes to get back a reusable "handle" for a template's media header.
+export async function uploadTemplateMedia(params: {
+  appId: string;
+  accessToken: string;
+  fileBytes: Buffer;
+  fileType: string;
+  fileName: string;
+}): Promise<string> {
+  const { appId, accessToken, fileBytes, fileType, fileName } = params;
+
+  const startRes = await fetch(
+    `${GRAPH_BASE}/${appId}/uploads?file_length=${fileBytes.length}&file_type=${encodeURIComponent(
+      fileType
+    )}&file_name=${encodeURIComponent(fileName)}`,
+    { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const startBody = await startRes.json().catch(() => ({}));
+  if (!startRes.ok) {
+    throw new GraphApiError(
+      startBody?.error?.message ?? "Could not start media upload",
+      startRes.status,
+      startBody?.error?.code
+    );
+  }
+  const uploadSessionId: string = startBody.id;
+
+  const uploadRes = await fetch(`${GRAPH_BASE}/${uploadSessionId}`, {
+    method: "POST",
+    headers: {
+      Authorization: `OAuth ${accessToken}`,
+      file_offset: "0",
+    },
+    body: new Uint8Array(fileBytes),
+  });
+  const uploadBody = await uploadRes.json().catch(() => ({}));
+  if (!uploadRes.ok || !uploadBody.h) {
+    throw new GraphApiError(
+      uploadBody?.error?.message ?? "Could not upload media bytes",
+      uploadRes.status,
+      uploadBody?.error?.code
+    );
+  }
+  return uploadBody.h as string;
 }
 
 export async function sendTemplateMessage(params: {

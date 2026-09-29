@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export type TemplateRow = {
@@ -10,8 +10,10 @@ export type TemplateRow = {
   category: string;
   status: string;
   bodyText: string;
+  headerType: string | null;
   headerText: string | null;
   footerText: string | null;
+  buttons: Array<{ type: string; text: string; value?: string }> | null;
   variableCount: number;
   rejectionReason: string | null;
 };
@@ -21,6 +23,8 @@ export type WabaAccountOption = {
   displayName: string | null;
   displayPhoneNumber: string | null;
 };
+
+type ButtonDraft = { type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER"; text: string; value: string };
 
 const inputClass =
   "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50";
@@ -43,6 +47,12 @@ function renderPreview(bodyText: string): string {
   return bodyText.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, n) => `[Sample value ${n}]`);
 }
 
+const MEDIA_ACCEPT: Record<string, string> = {
+  image: "image/jpeg,image/png",
+  video: "video/mp4,video/3gpp",
+  document: "application/pdf",
+};
+
 export function TemplatesManager({
   initialTemplates,
   accounts,
@@ -60,9 +70,15 @@ export function TemplatesManager({
   const [name, setName] = useState("");
   const [language, setLanguage] = useState("en_US");
   const [category, setCategory] = useState("marketing");
+  const [headerType, setHeaderType] = useState<"none" | "text" | "image" | "video" | "document">("none");
   const [headerText, setHeaderText] = useState("");
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [bodyText, setBodyText] = useState("");
   const [footerText, setFooterText] = useState("");
+  const [buttons, setButtons] = useState<ButtonDraft[]>([]);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
 
@@ -89,9 +105,43 @@ export function TemplatesManager({
     router.refresh();
   }
 
+  function addButton() {
+    if (buttons.length >= 3) return;
+    setButtons((prev) => [...prev, { type: "QUICK_REPLY", text: "", value: "" }]);
+  }
+  function updateButton(index: number, patch: Partial<ButtonDraft>) {
+    setButtons((prev) => prev.map((b, i) => (i === index ? { ...b, ...patch } : b)));
+  }
+  function removeButton(index: number) {
+    setButtons((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setCreateError(null);
+    setMediaError(null);
+
+    let headerMediaHandle: string | undefined;
+    if (headerType === "image" || headerType === "video" || headerType === "document") {
+      if (!mediaFile) {
+        setMediaError("Choose a file for this header type");
+        return;
+      }
+      setMediaUploading(true);
+      const mediaForm = new FormData();
+      mediaForm.append("wabaAccountId", selectedAccountId);
+      mediaForm.append("file", mediaFile);
+      const mediaRes = await fetch("/api/templates/media", { method: "POST", body: mediaForm });
+      setMediaUploading(false);
+      if (!mediaRes.ok) {
+        const data = await mediaRes.json().catch(() => ({}));
+        setMediaError(data.error ?? "Media upload failed");
+        return;
+      }
+      const mediaData = await mediaRes.json();
+      headerMediaHandle = mediaData.handle;
+    }
+
     setCreateLoading(true);
     const res = await fetch("/api/templates", {
       method: "POST",
@@ -101,9 +151,12 @@ export function TemplatesManager({
         name,
         language,
         category,
-        headerText: headerText || undefined,
+        headerType,
+        headerText: headerType === "text" ? headerText || undefined : undefined,
+        headerMediaHandle,
         bodyText,
         footerText: footerText || undefined,
+        buttons: buttons.length > 0 ? buttons.filter((b) => b.text) : undefined,
       }),
     });
     setCreateLoading(false);
@@ -113,9 +166,13 @@ export function TemplatesManager({
       return;
     }
     setName("");
+    setHeaderType("none");
     setHeaderText("");
+    setMediaFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setBodyText("");
     setFooterText("");
+    setButtons([]);
     setShowForm(false);
     router.refresh();
   }
@@ -203,12 +260,50 @@ export function TemplatesManager({
                 </select>
               </div>
             </div>
+
             <div>
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Header text <span className="text-zinc-400">(optional)</span>
-              </label>
-              <input value={headerText} onChange={(e) => setHeaderText(e.target.value)} className={inputClass} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Header</label>
+              <select
+                value={headerType}
+                onChange={(e) => {
+                  setHeaderType(e.target.value as typeof headerType);
+                  setMediaFile(null);
+                  setMediaError(null);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+                className={inputClass}
+              >
+                <option value="none">None</option>
+                <option value="text">Text</option>
+                <option value="image">Image</option>
+                <option value="video">Video</option>
+                <option value="document">Document (PDF)</option>
+              </select>
+              {headerType === "text" && (
+                <input
+                  value={headerText}
+                  onChange={(e) => setHeaderText(e.target.value)}
+                  className={`${inputClass} mt-2`}
+                  placeholder="Header text"
+                />
+              )}
+              {(headerType === "image" || headerType === "video" || headerType === "document") && (
+                <div className="mt-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={MEDIA_ACCEPT[headerType]}
+                    onChange={(e) => setMediaFile(e.target.files?.[0] ?? null)}
+                    className="text-sm"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Uploaded to Meta when you submit the template. Max 16MB.
+                  </p>
+                  {mediaError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{mediaError}</p>}
+                </div>
+              )}
             </div>
+
             <div>
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Body <span className="text-zinc-400">use {"{{1}}"}, {"{{2}}"}… for variables</span>
@@ -229,14 +324,67 @@ export function TemplatesManager({
               <input value={footerText} onChange={(e) => setFooterText(e.target.value)} className={inputClass} />
             </div>
 
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Buttons <span className="text-zinc-400">(optional, up to 3)</span>
+                </label>
+                {buttons.length < 3 && (
+                  <button
+                    type="button"
+                    onClick={addButton}
+                    className="text-xs font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                  >
+                    + Add button
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 space-y-2">
+                {buttons.map((b, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <select
+                      value={b.type}
+                      onChange={(e) => updateButton(i, { type: e.target.value as ButtonDraft["type"], value: "" })}
+                      className={`${inputClass} max-w-[130px]`}
+                    >
+                      <option value="QUICK_REPLY">Quick reply</option>
+                      <option value="URL">Website URL</option>
+                      <option value="PHONE_NUMBER">Call phone</option>
+                    </select>
+                    <input
+                      placeholder="Button text"
+                      value={b.text}
+                      onChange={(e) => updateButton(i, { text: e.target.value })}
+                      className={inputClass}
+                    />
+                    {b.type !== "QUICK_REPLY" && (
+                      <input
+                        placeholder={b.type === "URL" ? "https://…" : "+1234567890"}
+                        value={b.value}
+                        onChange={(e) => updateButton(i, { value: e.target.value })}
+                        className={inputClass}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeButton(i)}
+                      className="shrink-0 text-xs text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {createError && <p className="text-sm text-red-600 dark:text-red-400">{createError}</p>}
 
             <button
               type="submit"
-              disabled={createLoading}
+              disabled={createLoading || mediaUploading}
               className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
             >
-              {createLoading ? "Submitting…" : "Submit to Meta for approval"}
+              {mediaUploading ? "Uploading media…" : createLoading ? "Submitting…" : "Submit to Meta for approval"}
             </button>
           </div>
 
@@ -244,9 +392,26 @@ export function TemplatesManager({
             <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Preview</div>
             <div className="mt-2 rounded-2xl bg-[#e5ddd5] p-4 dark:bg-zinc-800">
               <div className="max-w-xs rounded-lg bg-white p-3 text-sm shadow-sm dark:bg-zinc-900 dark:text-zinc-50">
-                {headerText && <div className="mb-1 font-semibold">{headerText}</div>}
+                {headerType === "text" && headerText && <div className="mb-1 font-semibold">{headerText}</div>}
+                {(headerType === "image" || headerType === "video" || headerType === "document") && (
+                  <div className="mb-2 flex h-24 items-center justify-center rounded bg-zinc-200 text-xs text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+                    {mediaFile ? mediaFile.name : `${headerType} attachment`}
+                  </div>
+                )}
                 <div className="whitespace-pre-wrap">{preview || "Your message body will appear here."}</div>
                 {footerText && <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{footerText}</div>}
+                {buttons.length > 0 && (
+                  <div className="mt-2 space-y-1 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                    {buttons.map((b, i) => (
+                      <div
+                        key={i}
+                        className="rounded-md border border-zinc-200 px-2 py-1 text-center text-xs text-emerald-700 dark:border-zinc-700 dark:text-emerald-400"
+                      >
+                        {b.text || "Button"}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -275,7 +440,11 @@ export function TemplatesManager({
               <tr key={t.id} className="border-b border-zinc-100 align-top last:border-0 dark:border-zinc-900">
                 <td className="px-4 py-3">
                   <div className="font-medium text-zinc-900 dark:text-zinc-50">{t.name}</div>
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{t.language}</div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {t.language}
+                    {t.headerType && t.headerType !== "TEXT" ? ` · ${t.headerType.toLowerCase()} header` : ""}
+                    {t.buttons && t.buttons.length > 0 ? ` · ${t.buttons.length} button${t.buttons.length > 1 ? "s" : ""}` : ""}
+                  </div>
                   <div className="mt-1 max-w-md truncate text-xs text-zinc-500 dark:text-zinc-400">
                     {t.bodyText}
                   </div>

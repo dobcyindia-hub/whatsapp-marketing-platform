@@ -279,9 +279,15 @@ export function CampaignsManager({
             {initialCampaigns.map((c) => (
               <tr key={c.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-900">
                 <td className="px-4 py-3">
-                  <div className="font-medium text-zinc-900 dark:text-zinc-50">{c.name}</div>
+                  <a
+                    href={`/campaigns/${c.id}`}
+                    className="font-medium text-zinc-900 hover:text-emerald-600 hover:underline dark:text-zinc-50 dark:hover:text-emerald-400"
+                  >
+                    {c.name}
+                  </a>
                   <div className="text-xs text-zinc-500 dark:text-zinc-400">
                     {c.template?.name ?? "—"} · {c.list?.name ?? "—"} · {c.totalRecipients} recipients
+                    {c.sentCount > 0 && ` · ${((c.deliveredCount / c.sentCount) * 100).toFixed(0)}% delivered`}
                   </div>
                 </td>
                 <td className="px-4 py-3">

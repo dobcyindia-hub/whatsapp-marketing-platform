@@ -20,6 +20,12 @@ export async function GET() {
   return NextResponse.json({ templates: rows });
 }
 
+const buttonSchema = z.object({
+  type: z.enum(["QUICK_REPLY", "URL", "PHONE_NUMBER"]),
+  text: z.string().min(1).max(25),
+  value: z.string().max(2000).optional(),
+});
+
 const createSchema = z.object({
   wabaAccountId: z.string().uuid(),
   name: z
@@ -29,9 +35,12 @@ const createSchema = z.object({
     .regex(/^[a-z0-9_]+$/, "Use lowercase letters, numbers, and underscores only"),
   language: z.string().min(2).max(16),
   category: z.enum(["marketing", "utility", "authentication"]),
+  headerType: z.enum(["none", "text", "image", "video", "document"]).default("none"),
   headerText: z.string().max(60).optional(),
+  headerMediaHandle: z.string().optional(),
   bodyText: z.string().min(1).max(1024),
   footerText: z.string().max(60).optional(),
+  buttons: z.array(buttonSchema).max(3).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -43,7 +52,12 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
-  const { wabaAccountId, name, language, category, headerText, bodyText, footerText } = parsed.data;
+  const { wabaAccountId, name, language, category, headerType, headerText, headerMediaHandle, bodyText, footerText, buttons } =
+    parsed.data;
+
+  if ((headerType === "image" || headerType === "video" || headerType === "document") && !headerMediaHandle) {
+    return NextResponse.json({ error: "Upload a media file for this header type first" }, { status: 400 });
+  }
 
   const account = await db.query.wabaAccounts.findFirst({
     where: and(eq(wabaAccounts.id, wabaAccountId), eq(wabaAccounts.teamId, session.teamId)),
@@ -51,7 +65,15 @@ export async function POST(request: NextRequest) {
   if (!account) return NextResponse.json({ error: "WhatsApp number not found" }, { status: 404 });
 
   const accessToken = decryptSecret(account.accessTokenEncrypted);
-  const components = buildTemplateComponents({ headerText, bodyText, footerText });
+  const metaHeaderType = headerType === "none" ? undefined : (headerType.toUpperCase() as "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT");
+  const components = buildTemplateComponents({
+    headerType: metaHeaderType,
+    headerText,
+    headerMediaHandle,
+    bodyText,
+    footerText,
+    buttons,
+  });
 
   let metaResult;
   try {
@@ -81,9 +103,10 @@ export async function POST(request: NextRequest) {
       category,
       status: (metaResult.status?.toLowerCase() as typeof templates.$inferInsert.status) ?? "pending",
       bodyText,
-      headerType: headerText ? "TEXT" : null,
-      headerText: headerText ?? null,
+      headerType: metaHeaderType ?? null,
+      headerText: headerType === "text" ? headerText ?? null : null,
       footerText: footerText ?? null,
+      buttons: buttons ?? [],
       variableCount: countVariables(bodyText),
     })
     .returning();

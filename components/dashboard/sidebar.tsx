@@ -12,10 +12,12 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Inbox,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
+  { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/campaigns", label: "Campaigns", icon: Send },
