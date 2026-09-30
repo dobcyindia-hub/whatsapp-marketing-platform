@@ -40,6 +40,7 @@ export default async function InboxPage() {
         name: c.name,
         phone: c.phone,
         lastActivityAt: lastActivityAt.toISOString(),
+        lastInboundAt: c.lastInboundAt?.toISOString() ?? null,
         preview,
       };
     })

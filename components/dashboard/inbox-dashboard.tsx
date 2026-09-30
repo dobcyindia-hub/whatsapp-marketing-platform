@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { explainErrorCode } from "@/lib/whatsapp/error-codes";
 
 export type ThreadRow = {
@@ -8,8 +8,11 @@ export type ThreadRow = {
   name: string | null;
   phone: string;
   lastActivityAt: string;
+  lastInboundAt: string | null;
   preview: string;
 };
+
+const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type TemplateOption = {
   id: string;
@@ -36,6 +39,11 @@ function bubbleText(e: MessageEvent): string {
     return `[${p.type ?? "message"}]`;
   }
   if (e.eventType === "outbound_template") return `Template: ${p.templateName ?? "—"}`;
+  if (e.eventType === "outbound_message") {
+    if (p.type === "text") return (p.text as { body?: string })?.body ?? "";
+    const caption = p.caption ? ` — ${p.caption}` : "";
+    return `[${p.type ?? "media"}] ${p.fileName ?? ""}${caption}`;
+  }
   if (e.eventType === "outbound_failed") return `Failed to send: ${p.error ?? "unknown error"}`;
   return e.eventType.replace(/_/g, " ");
 }
@@ -62,15 +70,36 @@ export function InboxDashboard({
   const [sendLoading, setSendLoading] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
 
+  const [composeMode, setComposeMode] = useState<"message" | "template">("message");
+  const [messageText, setMessageText] = useState("");
+  const [messageFile, setMessageFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const selectedTemplate = templates.find((t) => t.id === templateId);
+
+  const withinWindow = Boolean(
+    selected?.lastInboundAt && Date.now() - new Date(selected.lastInboundAt).getTime() < SESSION_WINDOW_MS
+  );
 
   useEffect(() => {
     if (!selected) return;
     setLoadingThread(true);
+    setMessageText("");
+    setMessageFile(null);
+    setSendError(null);
+    setSendSuccess(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     fetch(`/api/inbox/threads/${selected.id}`)
       .then((r) => r.json())
       .then((data) => setEvents(data.events ?? []))
       .finally(() => setLoadingThread(false));
+  }, [selected]);
+
+  useEffect(() => {
+    const within = Boolean(
+      selected?.lastInboundAt && Date.now() - new Date(selected.lastInboundAt).getTime() < SESSION_WINDOW_MS
+    );
+    setComposeMode(within ? "message" : "template");
   }, [selected]);
 
   async function handleSend() {
@@ -95,6 +124,31 @@ export function InboxDashboard({
     }
     setSendSuccess(true);
     setVarValue("");
+    const refreshed = await fetch(`/api/inbox/threads/${selected.id}`).then((r) => r.json());
+    setEvents(refreshed.events ?? []);
+  }
+
+  async function handleSendMessage() {
+    if (!selected || (!messageText && !messageFile)) return;
+    setSendError(null);
+    setSendSuccess(false);
+    setSendLoading(true);
+    const form = new FormData();
+    form.append("contactId", selected.id);
+    if (messageText) form.append("text", messageText);
+    if (messageFile) form.append("file", messageFile);
+
+    const res = await fetch("/api/inbox/send-message", { method: "POST", body: form });
+    setSendLoading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setSendError(data.error ?? "Could not send");
+      return;
+    }
+    setSendSuccess(true);
+    setMessageText("");
+    setMessageFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     const refreshed = await fetch(`/api/inbox/threads/${selected.id}`).then((r) => r.json());
     setEvents(refreshed.events ?? []);
   }
@@ -190,34 +244,91 @@ export function InboxDashboard({
             </div>
 
             <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
-              <div className="mb-1 text-xs text-zinc-500 dark:text-zinc-400">
-                Send an approved template (only Meta-compliant method for messaging outside a live session)
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} className={`${inputClass} max-w-[200px]`}>
-                  {templates.length === 0 && <option value="">No approved templates</option>}
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-                {selectedTemplate && selectedTemplate.variableCount > 0 && (
-                  <input
-                    placeholder={`{{1}} value (defaults to name)`}
-                    value={varValue}
-                    onChange={(e) => setVarValue(e.target.value)}
-                    className={`${inputClass} max-w-[180px]`}
-                  />
-                )}
+              <div className="mb-2 flex items-center gap-1">
                 <button
-                  onClick={handleSend}
-                  disabled={sendLoading || !templateId}
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                  onClick={() => setComposeMode("message")}
+                  disabled={!withinWindow}
+                  className={`rounded-lg px-3 py-1 text-xs font-medium ${
+                    composeMode === "message"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300"
+                      : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                  } disabled:cursor-not-allowed disabled:opacity-40`}
                 >
-                  {sendLoading ? "Sending…" : "Send"}
+                  Message
                 </button>
+                <button
+                  onClick={() => setComposeMode("template")}
+                  className={`rounded-lg px-3 py-1 text-xs font-medium ${
+                    composeMode === "template"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300"
+                      : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                  }`}
+                >
+                  Template
+                </button>
+                <span className="ml-auto text-[11px] text-zinc-400">
+                  {withinWindow
+                    ? "Within 24h window — free-form messages allowed"
+                    : "Outside 24h window — template required"}
+                </span>
               </div>
+
+              {composeMode === "message" ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      placeholder="Type a message…"
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                      className={`${inputClass} flex-1 min-w-[160px]`}
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={(e) => setMessageFile(e.target.files?.[0] ?? null)}
+                      className="max-w-[160px] text-xs"
+                    />
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={sendLoading || (!messageText && !messageFile)}
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      {sendLoading ? "Sending…" : "Send"}
+                    </button>
+                  </div>
+                  {messageFile && (
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      Attached: {messageFile.name} (caption uses the text field above)
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} className={`${inputClass} max-w-[200px]`}>
+                    {templates.length === 0 && <option value="">No approved templates</option>}
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedTemplate && selectedTemplate.variableCount > 0 && (
+                    <input
+                      placeholder={`{{1}} value (defaults to name)`}
+                      value={varValue}
+                      onChange={(e) => setVarValue(e.target.value)}
+                      className={`${inputClass} max-w-[180px]`}
+                    />
+                  )}
+                  <button
+                    onClick={handleSend}
+                    disabled={sendLoading || !templateId}
+                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    {sendLoading ? "Sending…" : "Send"}
+                  </button>
+                </div>
+              )}
               {sendError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{sendError}</p>}
               {sendSuccess && <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Sent.</p>}
             </div>

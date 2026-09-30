@@ -140,6 +140,66 @@ export async function uploadTemplateMedia(params: {
   return uploadBody.h as string;
 }
 
+// Regular (non-resumable) media upload used for session messages — distinct
+// from uploadTemplateMedia's resumable-upload flow used at template
+// creation time. Returns a media id valid for ~30 days, single WABA use.
+export async function uploadMessageMedia(params: {
+  phoneNumberId: string;
+  accessToken: string;
+  fileBytes: Buffer;
+  mimeType: string;
+  fileName: string;
+}): Promise<string> {
+  const { phoneNumberId, accessToken, fileBytes, mimeType, fileName } = params;
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("file", new Blob([new Uint8Array(fileBytes)], { type: mimeType }), fileName);
+
+  const res = await fetch(`${GRAPH_BASE}/${phoneNumberId}/media`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.id) {
+    throw new GraphApiError(body?.error?.message ?? "Could not upload media", res.status, body?.error?.code);
+  }
+  return body.id as string;
+}
+
+export type MessageMediaType = "image" | "video" | "document" | "audio";
+
+// Free-form session message — only deliverable within 24h of the customer's
+// last inbound message (Meta's customer-service-window policy). Outside
+// that window Meta rejects it with error 131047; use a template instead.
+export async function sendSessionMessage(params: {
+  phoneNumberId: string;
+  accessToken: string;
+  to: string;
+  text?: string;
+  media?: { type: MessageMediaType; id: string; caption?: string; filename?: string };
+}): Promise<{ messages: Array<{ id: string }> }> {
+  const { phoneNumberId, accessToken, to, text, media } = params;
+
+  const payload: Record<string, unknown> = { messaging_product: "whatsapp", to };
+  if (media) {
+    payload.type = media.type;
+    payload[media.type] = {
+      id: media.id,
+      ...(media.caption ? { caption: media.caption } : {}),
+      ...(media.type === "document" && media.filename ? { filename: media.filename } : {}),
+    };
+  } else {
+    payload.type = "text";
+    payload.text = { body: text ?? "" };
+  }
+
+  return graphFetch(`/${phoneNumberId}/messages`, accessToken, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function sendTemplateMessage(params: {
   phoneNumberId: string;
   accessToken: string;
