@@ -4,6 +4,10 @@ import { campaigns, campaignRecipients, contacts, messageEvents, wabaAccounts } 
 import { fireKeywordReplyAutomations } from "@/lib/automations/engine";
 import type { MetaWebhookPayload, MetaStatusUpdate, MetaInboundMessage } from "./types";
 
+// Exact-match, case-insensitive — a message that just says one of these
+// words auto-opts the sender out, per WhatsApp's own opt-out conventions.
+const OPT_OUT_KEYWORDS = new Set(["stop", "unsubscribe", "opt out", "optout", "cancel"]);
+
 async function findWabaAccount(phoneNumberId: string) {
   return db.query.wabaAccounts.findFirst({ where: eq(wabaAccounts.phoneNumberId, phoneNumberId) });
 }
@@ -100,6 +104,11 @@ async function handleInboundMessage(
   });
 
   await db.update(contacts).set({ lastInboundAt: new Date() }).where(eq(contacts.id, contact.id));
+
+  const bodyText = message.text?.body?.trim().toLowerCase();
+  if (bodyText && OPT_OUT_KEYWORDS.has(bodyText)) {
+    await db.update(contacts).set({ optedOut: true, optedOutAt: new Date() }).where(eq(contacts.id, contact.id));
+  }
 
   if (message.text?.body) {
     await fireKeywordReplyAutomations({

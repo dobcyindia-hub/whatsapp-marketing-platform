@@ -11,6 +11,7 @@ const updateSchema = z.object({
   email: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
   tags: z.array(z.string()).optional(),
   optedOut: z.boolean().optional(),
+  notes: z.string().max(4096).nullable().optional(),
 });
 
 export async function PATCH(

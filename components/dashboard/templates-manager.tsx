@@ -294,12 +294,18 @@ export function TemplatesManager({
                 <option value="document">Document (PDF)</option>
               </select>
               {headerType === "text" && (
-                <input
-                  value={headerText}
-                  onChange={(e) => setHeaderText(e.target.value)}
-                  className={`${inputClass} mt-2`}
-                  placeholder="Header text"
-                />
+                <>
+                  <input
+                    value={headerText}
+                    onChange={(e) => setHeaderText(e.target.value.slice(0, 60))}
+                    className={`${inputClass} mt-2`}
+                    placeholder="Header text"
+                    maxLength={60}
+                  />
+                  <p className={`mt-0.5 text-right text-[11px] ${headerText.length > 55 ? "text-amber-600 dark:text-amber-400" : "text-zinc-400"}`}>
+                    {headerText.length}/60
+                  </p>
+                </>
               )}
               {(headerType === "image" || headerType === "video" || headerType === "document") && (
                 <div className="mt-2">
@@ -326,16 +332,28 @@ export function TemplatesManager({
                 required
                 rows={5}
                 value={bodyText}
-                onChange={(e) => setBodyText(e.target.value)}
+                onChange={(e) => setBodyText(e.target.value.slice(0, 1024))}
                 className={inputClass}
                 placeholder={"Hi {{1}}, your order #{{2}} has shipped!"}
+                maxLength={1024}
               />
+              <p className={`mt-0.5 text-right text-[11px] ${bodyText.length > 950 ? "text-amber-600 dark:text-amber-400" : "text-zinc-400"}`}>
+                {bodyText.length}/1024
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Footer text <span className="text-zinc-400">(optional)</span>
               </label>
-              <input value={footerText} onChange={(e) => setFooterText(e.target.value)} className={inputClass} />
+              <input
+                value={footerText}
+                onChange={(e) => setFooterText(e.target.value.slice(0, 60))}
+                className={inputClass}
+                maxLength={60}
+              />
+              <p className={`mt-0.5 text-right text-[11px] ${footerText.length > 55 ? "text-amber-600 dark:text-amber-400" : "text-zinc-400"}`}>
+                {footerText.length}/60
+              </p>
             </div>
 
             <div>

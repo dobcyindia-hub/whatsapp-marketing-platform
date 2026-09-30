@@ -48,6 +48,7 @@ export const recipientStatusEnum = pgEnum("recipient_status", [
   "replied",
   "failed",
   "skipped_opted_out",
+  "cancelled",
 ]);
 
 export const wabaStatusEnum = pgEnum("waba_status", [
@@ -137,6 +138,7 @@ export const contacts = pgTable("contacts", {
   optedOutAt: timestamp("opted_out_at"),
   lastMessagedAt: timestamp("last_messaged_at"),
   lastInboundAt: timestamp("last_inbound_at"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
   teamPhoneIdx: uniqueIndex("contacts_team_phone_idx").on(t.teamId, t.phone),
@@ -289,4 +291,18 @@ export const messageEvents = pgTable("message_events", {
 }, (t) => ({
   teamIdx: index("message_events_team_idx").on(t.teamId),
   metaMsgIdx: index("message_events_meta_msg_idx").on(t.metaMessageId),
+}));
+
+// ---------- Quick replies (canned snippets for the Inbox) ----------
+
+export const quickReplies = pgTable("quick_replies", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  teamId: uuid("team_id")
+    .references(() => teams.id, { onDelete: "cascade" })
+    .notNull(),
+  title: varchar("title", { length: 100 }).notNull(),
+  bodyText: text("body_text").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  teamIdx: index("quick_replies_team_idx").on(t.teamId),
 }));

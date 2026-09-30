@@ -10,8 +10,28 @@ export type ContactRow = {
   email: string | null;
   tags: string[] | null;
   optedOut: boolean;
+  notes: string | null;
   createdAt: string;
 };
+
+function downloadContactsCsv(rows: ContactRow[]) {
+  const header = "name,phone,email,tags,status,notes";
+  const lines = rows.map((c) =>
+    [c.name ?? "", c.phone, c.email ?? "", (c.tags ?? []).join(";"), c.optedOut ? "opted_out" : "subscribed", c.notes ?? ""]
+      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+      .join(",")
+  );
+  const csv = [header, ...lines].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "contacts.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 export type ListRow = {
   id: string;
@@ -234,6 +254,17 @@ export function ContactsManager({
     router.refresh();
   }
 
+  async function handleEditNotes(contact: ContactRow) {
+    const next = window.prompt("Notes for " + (contact.name || contact.phone), contact.notes ?? "");
+    if (next === null) return;
+    await fetch(`/api/contacts/${contact.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: next || null }),
+    });
+    router.refresh();
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -244,6 +275,12 @@ export function ContactsManager({
           className={`${inputClass} max-w-xs`}
         />
         <div className="ml-auto flex gap-2">
+          <button
+            onClick={() => downloadContactsCsv(filtered)}
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            Export CSV
+          </button>
           <button
             onClick={() => setShowImport((v) => !v)}
             className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
@@ -439,6 +476,13 @@ export function ContactsManager({
                     {c.phone}
                     {c.email ? ` · ${c.email}` : ""}
                   </div>
+                  <button
+                    onClick={() => handleEditNotes(c)}
+                    className="mt-0.5 text-[11px] text-emerald-600 hover:underline dark:text-emerald-400"
+                    title={c.notes ?? undefined}
+                  >
+                    {c.notes ? "Edit notes" : "Add notes"}
+                  </button>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">

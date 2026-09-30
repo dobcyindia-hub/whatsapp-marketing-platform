@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { InboxDashboard } from "@/components/dashboard/inbox-dashboard";
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { contacts, templates, messageEvents } from "@/database/schema";
+import { contacts, templates, messageEvents, quickReplies } from "@/database/schema";
 import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 
 export default async function InboxPage() {
@@ -53,13 +53,18 @@ export default async function InboxPage() {
     columns: { id: true, name: true, language: true, variableCount: true },
   });
 
+  const quickReplyRows = await db.query.quickReplies.findMany({
+    where: eq(quickReplies.teamId, session.teamId),
+    orderBy: desc(quickReplies.createdAt),
+  });
+
   return (
     <div>
       <PageHeader
         title="Inbox"
         description="Conversations with people who've messaged your WhatsApp number."
       />
-      <InboxDashboard threads={previews} templates={templateRows} />
+      <InboxDashboard threads={previews} templates={templateRows} quickReplies={quickReplyRows} />
     </div>
   );
 }

@@ -1,15 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { campaigns, campaignRecipients, contactListMembers } from "@/database/schema";
 import { getSession } from "@/lib/auth/session";
 import { enqueueCampaignRecipient } from "@/lib/queue/campaign-queue";
 import { and, eq } from "drizzle-orm";
 
-export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+const sendSchema = z.object({
+  // Skip contacts messaged within the last N days, to avoid re-hitting the
+  // same people back-to-back across campaigns.
+  skipRecentlyMessagedDays: z.number().min(0).max(365).optional(),
+});
+
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  const body = await request.json().catch(() => ({}));
+  const parsed = sendSchema.safeParse(body);
+  const skipRecentlyMessagedDays = parsed.success ? parsed.data.skipRecentlyMessagedDays : undefined;
+
   const campaign = await db.query.campaigns.findFirst({
     where: and(eq(campaigns.id, id), eq(campaigns.teamId, session.teamId)),
   });
@@ -23,12 +34,20 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
   const members = await db.query.contactListMembers.findMany({
     where: eq(contactListMembers.listId, campaign.listId),
-    with: { contact: { columns: { id: true, optedOut: true } } },
+    with: { contact: { columns: { id: true, optedOut: true, lastMessagedAt: true } } },
   });
 
-  const eligible = members.filter((m) => !m.contact.optedOut);
+  const cutoff = skipRecentlyMessagedDays ? Date.now() - skipRecentlyMessagedDays * 24 * 60 * 60 * 1000 : null;
+  const eligible = members.filter(
+    (m) =>
+      !m.contact.optedOut &&
+      (cutoff === null || !m.contact.lastMessagedAt || m.contact.lastMessagedAt.getTime() < cutoff)
+  );
   if (eligible.length === 0) {
-    return NextResponse.json({ error: "No eligible (non opted-out) contacts in this list" }, { status: 422 });
+    return NextResponse.json(
+      { error: "No eligible contacts in this list (all opted out, or all excluded by the frequency cap)" },
+      { status: 422 }
+    );
   }
 
   const recipientRows = await db

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RetargetPanel } from "@/components/dashboard/retarget-panel";
+import { CancelCampaignButton } from "@/components/dashboard/cancel-campaign-button";
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { campaigns } from "@/database/schema";
@@ -25,6 +26,7 @@ function statusColor(status: string) {
     case "failed":
       return "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400";
     case "skipped_opted_out":
+    case "cancelled":
       return "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300";
     default:
       return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400";
@@ -88,6 +90,11 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
       <PageHeader
         title={campaign.name}
         description={`${campaign.template?.name ?? "—"} · ${campaign.list?.name ?? "—"}`}
+        action={
+          ["scheduled", "sending"].includes(campaign.status) ? (
+            <CancelCampaignButton campaignId={campaign.id} />
+          ) : undefined
+        }
       />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-6">

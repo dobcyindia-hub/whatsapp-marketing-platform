@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { explainErrorCode } from "@/lib/whatsapp/error-codes";
 
 export type ThreadRow = {
@@ -19,6 +20,12 @@ export type TemplateOption = {
   name: string;
   language: string;
   variableCount: number;
+};
+
+export type QuickReplyOption = {
+  id: string;
+  title: string;
+  bodyText: string;
 };
 
 type MessageEvent = {
@@ -55,10 +62,13 @@ function isOutbound(e: MessageEvent): boolean {
 export function InboxDashboard({
   threads,
   templates,
+  quickReplies,
 }: {
   threads: ThreadRow[];
   templates: TemplateOption[];
+  quickReplies: QuickReplyOption[];
 }) {
+  const router = useRouter();
   const [selected, setSelected] = useState<ThreadRow | null>(threads[0] ?? null);
   const [events, setEvents] = useState<MessageEvent[]>([]);
   const [loadingThread, setLoadingThread] = useState(false);
@@ -74,6 +84,26 @@ export function InboxDashboard({
   const [messageText, setMessageText] = useState("");
   const [messageFile, setMessageFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [showSnippetForm, setShowSnippetForm] = useState(false);
+  const [snippetTitle, setSnippetTitle] = useState("");
+  const [snippetBody, setSnippetBody] = useState("");
+  const [snippetSaving, setSnippetSaving] = useState(false);
+
+  async function handleAddSnippet() {
+    if (!snippetTitle || !snippetBody) return;
+    setSnippetSaving(true);
+    await fetch("/api/quick-replies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: snippetTitle, bodyText: snippetBody }),
+    });
+    setSnippetSaving(false);
+    setSnippetTitle("");
+    setSnippetBody("");
+    setShowSnippetForm(false);
+    router.refresh();
+  }
 
   const selectedTemplate = templates.find((t) => t.id === templateId);
 
@@ -275,6 +305,56 @@ export function InboxDashboard({
 
               {composeMode === "message" ? (
                 <>
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    {quickReplies.length > 0 && (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const snippet = quickReplies.find((q) => q.id === e.target.value);
+                          if (snippet) setMessageText((prev) => (prev ? prev + " " : "") + snippet.bodyText);
+                        }}
+                        className={`${inputClass} max-w-[200px]`}
+                      >
+                        <option value="">Insert a quick reply…</option>
+                        {quickReplies.map((q) => (
+                          <option key={q.id} value={q.id}>
+                            {q.title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowSnippetForm((v) => !v)}
+                      className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+                    >
+                      {showSnippetForm ? "Cancel" : "+ New snippet"}
+                    </button>
+                  </div>
+                  {showSnippetForm && (
+                    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 p-2 dark:border-zinc-800">
+                      <input
+                        placeholder="Title"
+                        value={snippetTitle}
+                        onChange={(e) => setSnippetTitle(e.target.value)}
+                        className={`${inputClass} max-w-[120px]`}
+                      />
+                      <input
+                        placeholder="Message text"
+                        value={snippetBody}
+                        onChange={(e) => setSnippetBody(e.target.value)}
+                        className={`${inputClass} flex-1 min-w-[160px]`}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddSnippet}
+                        disabled={snippetSaving || !snippetTitle || !snippetBody}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                      >
+                        {snippetSaving ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center gap-2">
                     <input
                       placeholder="Type a message…"

@@ -66,8 +66,10 @@ export function CampaignsManager({
   const [listId, setListId] = useState(lists[0]?.id ?? "");
   const [scheduledAt, setScheduledAt] = useState("");
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [skipRecentDays, setSkipRecentDays] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   const selectedTemplate = useMemo(() => templates.find((t) => t.id === templateId), [templates, templateId]);
   const variableIndexes = useMemo(
@@ -111,7 +113,13 @@ export function CampaignsManager({
     }
 
     const { campaign } = await createRes.json();
-    const sendRes = await fetch(`/api/campaigns/${campaign.id}/send`, { method: "POST" });
+    const sendRes = await fetch(`/api/campaigns/${campaign.id}/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        skipRecentlyMessagedDays: skipRecentDays ? Number(skipRecentDays) : undefined,
+      }),
+    });
     setLoading(false);
 
     if (!sendRes.ok) {
@@ -124,7 +132,15 @@ export function CampaignsManager({
     setName("");
     setMapping({});
     setScheduledAt("");
+    setSkipRecentDays("");
     setShowForm(false);
+    router.refresh();
+  }
+
+  async function handleDuplicate(id: string) {
+    setDuplicatingId(id);
+    await fetch(`/api/campaigns/${id}/duplicate`, { method: "POST" });
+    setDuplicatingId(null);
     router.refresh();
   }
 
@@ -231,16 +247,31 @@ export function CampaignsManager({
             </div>
           )}
 
-          <div>
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Schedule <span className="text-zinc-400">(optional — leave blank to send now)</span>
-            </label>
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-              className={`${inputClass} max-w-xs`}
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Schedule <span className="text-zinc-400">(optional — leave blank to send now)</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Skip contacts messaged in the last <span className="text-zinc-400">(days, optional)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                placeholder="e.g. 3"
+                value={skipRecentDays}
+                onChange={(e) => setSkipRecentDays(e.target.value)}
+                className={inputClass}
+              />
+            </div>
           </div>
 
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -266,12 +297,13 @@ export function CampaignsManager({
               <th className="px-4 py-3 font-medium">Read</th>
               <th className="px-4 py-3 font-medium">Failed</th>
               <th className="px-4 py-3 font-medium">Replied</th>
+              <th className="px-4 py-3 font-medium"></th>
             </tr>
           </thead>
           <tbody>
             {initialCampaigns.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={8} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No campaigns yet.
                 </td>
               </tr>
@@ -300,6 +332,15 @@ export function CampaignsManager({
                 <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{c.readCount}</td>
                 <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{c.failedCount}</td>
                 <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{c.repliedCount}</td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => handleDuplicate(c.id)}
+                    disabled={duplicatingId === c.id}
+                    className="text-xs font-medium text-zinc-400 hover:text-emerald-600 disabled:opacity-60 dark:hover:text-emerald-400"
+                  >
+                    {duplicatingId === c.id ? "Duplicating…" : "Duplicate"}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
