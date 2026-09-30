@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { RetargetPanel } from "@/components/dashboard/retarget-panel";
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { campaigns } from "@/database/schema";
 import { and, eq } from "drizzle-orm";
+
+const DELIVERED_STATUSES = new Set(["delivered", "read", "replied"]);
 
 function pct(numerator: number, denominator: number): string {
   if (denominator === 0) return "—";
@@ -38,11 +41,21 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
       template: { columns: { name: true, bodyText: true } },
       list: { columns: { name: true } },
       recipients: {
-        with: { contact: { columns: { name: true, phone: true } } },
+        with: { contact: { columns: { id: true, name: true, phone: true } } },
       },
     },
   });
   if (!campaign) notFound();
+
+  const undelivered = campaign.recipients
+    .filter((r) => !DELIVERED_STATUSES.has(r.status))
+    .map((r) => ({
+      contactId: r.contact.id,
+      phone: r.contact.phone,
+      name: r.contact.name,
+      status: r.status,
+      errorMessage: r.errorMessage,
+    }));
 
   const stats = [
     { label: "Total", value: campaign.totalRecipients },
@@ -74,6 +87,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
       </div>
 
       <div className="mt-6">
+        <RetargetPanel recipients={undelivered} campaignName={campaign.name} />
         <h3 className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">Recipients</h3>
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
           <table className="w-full text-sm">
