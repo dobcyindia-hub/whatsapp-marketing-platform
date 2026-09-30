@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
         buttons: parsedTemplate.buttons,
         variableCount: parsedTemplate.variableCount,
         rejectionReason: mt.rejected_reason && mt.rejected_reason !== "NONE" ? mt.rejected_reason : null,
+        qualityScore: mt.quality_score?.score ?? null,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({

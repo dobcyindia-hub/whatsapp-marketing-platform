@@ -144,7 +144,13 @@ export function InboxDashboard({
                 const outbound = isOutbound(e);
                 const errorInfo =
                   e.eventType === "failed" || e.eventType === "outbound_failed"
-                    ? explainErrorCode((e.rawPayload as { code?: string; errors?: Array<{ code: number }> })?.code ?? String((e.rawPayload as { errors?: Array<{ code: number }> })?.errors?.[0]?.code ?? ""))
+                    ? explainErrorCode(
+                        String(
+                          (e.rawPayload as { code?: string | number })?.code ??
+                            (e.rawPayload as { errors?: Array<{ code: number }> })?.errors?.[0]?.code ??
+                            ""
+                        )
+                      )
                     : null;
                 return (
                   <div key={e.id} className={`flex ${outbound ? "justify-end" : "justify-start"}`}>

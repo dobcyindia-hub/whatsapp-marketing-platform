@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/dashboard/page-header";
+import { QueueHealthWidget } from "@/components/dashboard/queue-health-widget";
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { campaigns, contacts, wabaAccounts } from "@/database/schema";
@@ -58,6 +59,8 @@ export default async function OverviewPage() {
           tab to connect your Meta Cloud API number before sending campaigns.
         </div>
       )}
+
+      <QueueHealthWidget />
     </div>
   );
 }

@@ -54,6 +54,7 @@ export function ContactsManager({
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignResult, setAssignResult] = useState<string | null>(null);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return initialContacts;
@@ -206,6 +207,33 @@ export function ContactsManager({
     router.refresh();
   }
 
+  async function handleBulkOptOut(optedOut: boolean) {
+    if (selectedIds.size === 0) return;
+    setBulkActionLoading(true);
+    await Promise.all(
+      Array.from(selectedIds).map((id) =>
+        fetch(`/api/contacts/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ optedOut }),
+        })
+      )
+    );
+    setBulkActionLoading(false);
+    setSelectedIds(new Set());
+    router.refresh();
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} contact${selectedIds.size === 1 ? "" : "s"}? This can't be undone.`)) return;
+    setBulkActionLoading(true);
+    await Promise.all(Array.from(selectedIds).map((id) => fetch(`/api/contacts/${id}`, { method: "DELETE" })));
+    setBulkActionLoading(false);
+    setSelectedIds(new Set());
+    router.refresh();
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -335,6 +363,28 @@ export function ContactsManager({
             className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
           >
             {assignLoading ? "Adding…" : "Add to list"}
+          </button>
+          <span className="h-5 w-px bg-emerald-200 dark:bg-emerald-800" />
+          <button
+            onClick={() => handleBulkOptOut(true)}
+            disabled={bulkActionLoading}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            Opt out
+          </button>
+          <button
+            onClick={() => handleBulkOptOut(false)}
+            disabled={bulkActionLoading}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            Re-subscribe
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            disabled={bulkActionLoading}
+            className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60 dark:border-red-800 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-500/10"
+          >
+            Delete
           </button>
           <button
             onClick={() => setSelectedIds(new Set())}

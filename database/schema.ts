@@ -177,6 +177,9 @@ export const templates = pgTable("templates", {
   buttons: jsonb("buttons").$type<Array<{ type: string; text: string; value?: string }>>().default([]),
   variableCount: integer("variable_count").default(0).notNull(),
   rejectionReason: text("rejection_reason"),
+  // Meta's own quality signal (GREEN/YELLOW/RED/UNKNOWN) — a template
+  // sliding toward RED risks Meta pausing it or restricting the number.
+  qualityScore: varchar("quality_score", { length: 16 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (t) => ({

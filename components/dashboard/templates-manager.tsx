@@ -16,6 +16,7 @@ export type TemplateRow = {
   buttons: Array<{ type: string; text: string; value?: string }> | null;
   variableCount: number;
   rejectionReason: string | null;
+  qualityScore: string | null;
 };
 
 export type WabaAccountOption = {
@@ -40,6 +41,19 @@ function statusColor(status: string) {
       return "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400";
     default:
       return "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300";
+  }
+}
+
+function qualityColor(score: string | null) {
+  switch (score?.toUpperCase()) {
+    case "GREEN":
+      return "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400";
+    case "YELLOW":
+      return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400";
+    case "RED":
+      return "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400";
+    default:
+      return "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400";
   }
 }
 
@@ -426,12 +440,13 @@ export function TemplatesManager({
               <th className="px-4 py-3 font-medium">Category</th>
               <th className="px-4 py-3 font-medium">Variables</th>
               <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Quality</th>
             </tr>
           </thead>
           <tbody>
             {initialTemplates.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={5} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   No templates yet. Sync from Meta or create a new one.
                 </td>
               </tr>
@@ -458,6 +473,15 @@ export function TemplatesManager({
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusColor(t.status)}`}>
                     {t.status}
                   </span>
+                </td>
+                <td className="px-4 py-3">
+                  {t.qualityScore ? (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${qualityColor(t.qualityScore)}`}>
+                      {t.qualityScore.toLowerCase()}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-zinc-400">—</span>
+                  )}
                 </td>
               </tr>
             ))}

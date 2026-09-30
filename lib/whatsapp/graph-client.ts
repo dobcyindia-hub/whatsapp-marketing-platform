@@ -60,13 +60,14 @@ export type MetaTemplate = {
   category: string;
   status: string;
   rejected_reason?: string;
+  quality_score?: { score: string; date?: string };
   components: MetaTemplateComponent[];
 };
 
 export async function fetchTemplates(wabaId: string, accessToken: string): Promise<MetaTemplate[]> {
   const results: MetaTemplate[] = [];
   let path: string | null =
-    `/${wabaId}/message_templates?fields=id,name,language,category,status,rejected_reason,components&limit=200`;
+    `/${wabaId}/message_templates?fields=id,name,language,category,status,rejected_reason,quality_score,components&limit=200`;
 
   while (path) {
     const page = await graphFetch(path, accessToken);
