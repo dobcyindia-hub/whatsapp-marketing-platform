@@ -48,6 +48,13 @@ export function ContactsManager({
   const [importLoading, setImportLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [assignListChoice, setAssignListChoice] = useState<string>("__new__");
+  const [assignNewListName, setAssignNewListName] = useState("");
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignResult, setAssignResult] = useState<string | null>(null);
+
   const filtered = useMemo(() => {
     if (!search.trim()) return initialContacts;
     const q = search.trim().toLowerCase();
@@ -135,6 +142,67 @@ export function ContactsManager({
     }
     const data = await res.json();
     setImportResult(`Imported ${data.imported}, updated ${data.updated}, skipped ${data.skipped}.`);
+    router.refresh();
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => (prev.size === filtered.length ? new Set() : new Set(filtered.map((c) => c.id))));
+  }
+
+  async function handleAssignToList() {
+    setAssignError(null);
+    setAssignResult(null);
+    if (selectedIds.size === 0) {
+      setAssignError("Select at least one contact first");
+      return;
+    }
+    setAssignLoading(true);
+
+    let listId = assignListChoice;
+    if (assignListChoice === "__new__") {
+      if (!assignNewListName.trim()) {
+        setAssignLoading(false);
+        setAssignError("Enter a name for the new list");
+        return;
+      }
+      const createRes = await fetch("/api/lists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: assignNewListName.trim() }),
+      });
+      if (!createRes.ok) {
+        setAssignLoading(false);
+        const data = await createRes.json().catch(() => ({}));
+        setAssignError(data.error ?? "Could not create list");
+        return;
+      }
+      const created = await createRes.json();
+      listId = created.list.id;
+    }
+
+    const res = await fetch(`/api/lists/${listId}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactIds: Array.from(selectedIds) }),
+    });
+    setAssignLoading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setAssignError(data.error ?? "Could not add contacts to list");
+      return;
+    }
+    setAssignResult(`Added ${selectedIds.size} contact${selectedIds.size === 1 ? "" : "s"} to the list.`);
+    setSelectedIds(new Set());
+    setAssignNewListName("");
     router.refresh();
   }
 
@@ -236,10 +304,61 @@ export function ContactsManager({
         </form>
       )}
 
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-500/10">
+          <span className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
+            {selectedIds.size} selected
+          </span>
+          <select
+            value={assignListChoice}
+            onChange={(e) => setAssignListChoice(e.target.value)}
+            className={`${inputClass} max-w-[220px] bg-white dark:bg-zinc-900`}
+          >
+            <option value="__new__">Create new list</option>
+            {initialLists.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name} ({l.memberCount})
+              </option>
+            ))}
+          </select>
+          {assignListChoice === "__new__" && (
+            <input
+              placeholder="New list name"
+              value={assignNewListName}
+              onChange={(e) => setAssignNewListName(e.target.value)}
+              className={`${inputClass} max-w-[180px] bg-white dark:bg-zinc-900`}
+            />
+          )}
+          <button
+            onClick={handleAssignToList}
+            disabled={assignLoading}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+          >
+            {assignLoading ? "Adding…" : "Add to list"}
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            Clear
+          </button>
+          {assignError && <span className="text-sm text-red-600 dark:text-red-400">{assignError}</span>}
+          {assignResult && <span className="text-sm text-emerald-700 dark:text-emerald-400">{assignResult}</span>}
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+              <th className="w-10 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                  onChange={toggleSelectAll}
+                  className="rounded"
+                />
+              </th>
               <th className="px-4 py-3 font-medium">Contact</th>
               <th className="px-4 py-3 font-medium">Tags</th>
               <th className="px-4 py-3 font-medium">Status</th>
@@ -249,13 +368,21 @@ export function ContactsManager({
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
+                <td colSpan={5} className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400">
                   {initialContacts.length === 0 ? "No contacts yet." : "No contacts match your search."}
                 </td>
               </tr>
             )}
             {filtered.map((c) => (
               <tr key={c.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-900">
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(c.id)}
+                    onChange={() => toggleSelected(c.id)}
+                    className="rounded"
+                  />
+                </td>
                 <td className="px-4 py-3">
                   <div className="font-medium text-zinc-900 dark:text-zinc-50">{c.name || c.phone}</div>
                   <div className="text-xs text-zinc-500 dark:text-zinc-400">
