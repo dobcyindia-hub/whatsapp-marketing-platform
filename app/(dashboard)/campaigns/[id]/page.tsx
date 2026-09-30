@@ -6,6 +6,7 @@ import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { campaigns } from "@/database/schema";
 import { and, eq } from "drizzle-orm";
+import { explainErrorCode } from "@/lib/whatsapp/error-codes";
 
 const DELIVERED_STATUSES = new Set(["delivered", "read", "replied"]);
 
@@ -38,14 +39,19 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const campaign = await db.query.campaigns.findFirst({
     where: and(eq(campaigns.id, id), eq(campaigns.teamId, session.teamId)),
     with: {
-      template: { columns: { name: true, bodyText: true } },
+      template: { columns: { name: true, bodyText: true, category: true } },
       list: { columns: { name: true } },
+      wabaAccount: { columns: { conversationRates: true } },
       recipients: {
         with: { contact: { columns: { id: true, name: true, phone: true } } },
       },
     },
   });
   if (!campaign) notFound();
+
+  const rate = campaign.template ? campaign.wabaAccount?.conversationRates?.[campaign.template.category] : undefined;
+  const currency = campaign.wabaAccount?.conversationRates?.currency ?? "USD";
+  const estimatedCost = rate !== undefined ? rate * campaign.sentCount : null;
 
   const undelivered = campaign.recipients
     .filter((r) => !DELIVERED_STATUSES.has(r.status))
@@ -57,7 +63,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
       errorMessage: r.errorMessage,
     }));
 
-  const stats = [
+  const stats: Array<{ label: string; value: string | number; rate?: string }> = [
     { label: "Total", value: campaign.totalRecipients },
     { label: "Sent", value: campaign.sentCount, rate: pct(campaign.sentCount, campaign.totalRecipients) },
     { label: "Delivered", value: campaign.deliveredCount, rate: pct(campaign.deliveredCount, campaign.sentCount) },
@@ -65,6 +71,14 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
     { label: "Replied", value: campaign.repliedCount, rate: pct(campaign.repliedCount, campaign.sentCount) },
     { label: "Failed", value: campaign.failedCount, rate: pct(campaign.failedCount, campaign.totalRecipients) },
   ];
+
+  if (estimatedCost !== null && rate !== undefined) {
+    stats.push({
+      label: "Est. cost",
+      value: `${currency} ${estimatedCost.toFixed(2)}`,
+      rate: `${currency} ${rate.toFixed(4)} / ${campaign.template?.category}`,
+    });
+  }
 
   return (
     <div>
@@ -119,7 +133,18 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
                       {r.status.replace(/_/g, " ")}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-red-600 dark:text-red-400">{r.errorMessage ?? ""}</td>
+                  <td className="px-4 py-3 text-xs text-red-600 dark:text-red-400">
+                    {r.errorMessage}
+                    {(() => {
+                      const info = explainErrorCode(r.errorCode);
+                      return info ? (
+                        <div className="mt-0.5 text-zinc-500 dark:text-zinc-400">
+                          <span className="font-medium text-red-500 dark:text-red-400">{info.title}:</span>{" "}
+                          {info.action}
+                        </div>
+                      ) : null;
+                    })()}
+                  </td>
                 </tr>
               ))}
             </tbody>

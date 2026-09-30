@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { automations, automationRuns } from "@/database/schema";
+import { automations, automationRuns, contacts } from "@/database/schema";
 import { decryptSecret } from "@/lib/crypto";
 import { sendTemplateMessage, GraphApiError } from "@/lib/whatsapp/graph-client";
 import { resolveVariablesForContact } from "@/lib/whatsapp/template-utils";
@@ -47,6 +47,7 @@ async function sendAutomationMessage(
       bodyParams,
     });
     await db.insert(automationRuns).values({ automationId: automation.id, contactId: contact.id, status: "sent" });
+    await db.update(contacts).set({ lastMessagedAt: new Date() }).where(eq(contacts.id, contact.id));
   } catch (err) {
     const message = err instanceof GraphApiError ? err.message : "Failed to reach the Meta Graph API";
     await db.insert(automationRuns).values({

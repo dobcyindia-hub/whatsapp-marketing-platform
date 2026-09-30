@@ -21,6 +21,7 @@ export default async function WhatsAppPage() {
           messagingTier: true,
           webhookVerifyToken: true,
           lastSyncedAt: true,
+          conversationRates: true,
         },
       })
     : [];

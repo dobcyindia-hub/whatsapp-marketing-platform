@@ -3,6 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+export type ConversationRates = {
+  currency: string;
+  marketing?: number;
+  utility?: number;
+  authentication?: number;
+  service?: number;
+};
+
 export type WabaAccountSummary = {
   id: string;
   wabaId: string;
@@ -13,6 +21,7 @@ export type WabaAccountSummary = {
   messagingTier: string | null;
   webhookVerifyToken: string;
   lastSyncedAt: string | null;
+  conversationRates: ConversationRates | null;
 };
 
 const inputClass =
@@ -34,6 +43,30 @@ export function WhatsAppManager({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [ratesOpenId, setRatesOpenId] = useState<string | null>(null);
+  const [ratesDraft, setRatesDraft] = useState<ConversationRates>({ currency: "USD" });
+  const [ratesSaving, setRatesSaving] = useState(false);
+  const [ratesSaved, setRatesSaved] = useState(false);
+
+  function openRates(account: WabaAccountSummary) {
+    setRatesOpenId(account.id);
+    setRatesDraft(account.conversationRates ?? { currency: "USD" });
+    setRatesSaved(false);
+  }
+
+  async function saveRates(accountId: string) {
+    setRatesSaving(true);
+    const res = await fetch(`/api/whatsapp/${accountId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationRates: ratesDraft }),
+    });
+    setRatesSaving(false);
+    if (res.ok) {
+      setRatesSaved(true);
+      router.refresh();
+    }
+  }
 
   async function handleConnect(e: React.FormEvent) {
     e.preventDefault();
@@ -115,6 +148,62 @@ export function WhatsAppManager({
                   Paste these into your Meta App Dashboard → WhatsApp → Configuration → Webhooks,
                   and subscribe to the <code>messages</code> field.
                 </p>
+              </div>
+
+              <div className="mt-3">
+                {ratesOpenId === account.id ? (
+                  <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+                    <div className="mb-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      Conversation cost (per Meta&apos;s per-category pricing — enter your own known rates;
+                      Meta doesn&apos;t expose a live pricing API)
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                      <input
+                        placeholder="Currency"
+                        value={ratesDraft.currency}
+                        onChange={(e) => setRatesDraft((d) => ({ ...d, currency: e.target.value }))}
+                        className={`${inputClass} mt-0`}
+                      />
+                      {(["marketing", "utility", "authentication", "service"] as const).map((cat) => (
+                        <input
+                          key={cat}
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          placeholder={cat}
+                          value={ratesDraft[cat] ?? ""}
+                          onChange={(e) =>
+                            setRatesDraft((d) => ({ ...d, [cat]: e.target.value ? Number(e.target.value) : undefined }))
+                          }
+                          className={`${inputClass} mt-0`}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        onClick={() => saveRates(account.id)}
+                        disabled={ratesSaving}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                      >
+                        {ratesSaving ? "Saving…" : "Save rates"}
+                      </button>
+                      <button
+                        onClick={() => setRatesOpenId(null)}
+                        className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
+                      >
+                        Close
+                      </button>
+                      {ratesSaved && <span className="text-xs text-emerald-600 dark:text-emerald-400">Saved</span>}
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => openRates(account)}
+                    className="text-xs font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                  >
+                    Set conversation cost rates
+                  </button>
+                )}
               </div>
             </div>
           ))}

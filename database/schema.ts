@@ -100,6 +100,11 @@ export const wabaAccounts = pgTable("waba_accounts", {
   webhookVerifyToken: varchar("webhook_verify_token", { length: 128 }).notNull(),
   status: wabaStatusEnum("status").default("disconnected").notNull(),
   messagingTier: varchar("messaging_tier", { length: 32 }).default("tier_1k"),
+  // Per-conversation-category cost, entered manually in Settings (Meta doesn't
+  // expose a live pricing API) — used only to estimate campaign spend.
+  conversationRates: jsonb("conversation_rates")
+    .$type<{ currency: string; marketing?: number; utility?: number; authentication?: number; service?: number }>()
+    .default({ currency: "USD" }),
   lastSyncedAt: timestamp("last_synced_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({

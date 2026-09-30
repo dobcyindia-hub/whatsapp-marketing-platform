@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { campaignRecipients, campaigns } from "@/database/schema";
+import { campaignRecipients, campaigns, contacts } from "@/database/schema";
 import { decryptSecret } from "@/lib/crypto";
 import { GraphApiError, sendTemplateMessage } from "@/lib/whatsapp/graph-client";
 import { resolveVariablesForContact } from "@/lib/whatsapp/template-utils";
@@ -94,6 +94,8 @@ export async function processCampaignRecipient(
         sentAt: new Date(),
       })
       .where(eq(campaignRecipients.id, recipientId));
+
+    await db.update(contacts).set({ lastMessagedAt: new Date() }).where(eq(contacts.id, contact.id));
 
     await db
       .update(campaigns)
